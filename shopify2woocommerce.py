@@ -1,12 +1,10 @@
-# Usage: python3 shopify2woocommerce.py https://your-shopify-store.com
-# or for interactive mode, just: python3 shopify2woocommerce.py
-
 import json
 import os.path
 import requests
 from collections import OrderedDict
 import pandas as pd
 from sys import argv, exit
+import re
 
 # Flags, accumulators
 interactiveMode = False
@@ -20,13 +18,11 @@ if not os.path.exists('jsons'):
 # Functions:
 def downloadFile(x,y):
     if os.path.exists(y):
-        # print('skipping '+ y + ' as its already been downloaded.')
         return
     print('\nDownloading '+x)
 
     try:
         r = requests.get(x, allow_redirects=True)
-
     except requests.exceptions.RequestException as e:
         print('\nInvalid URL.')
         if interactiveMode: interactiveExit()
@@ -40,6 +36,26 @@ def interactiveExit():
     print('\n\nPress any key to exit.\n')
     a = input()
     exit()
+
+def extract_subscription_details(description):
+    subscription_pattern = r'Subscribe & Save (\d+)%'
+    match = re.search(subscription_pattern, description)
+    if match:
+        discount = match.group(1)
+        return True, int(discount)
+    return False, 0
+
+def process_attributes(product):
+    attributes = []
+    for i, option in enumerate(product.get('options', []), 1):
+        attribute = {
+            f'Attribute {i} name': option.get('name'),
+            f'Attribute {i} value(s)': ', '.join(option.get('values', [])),  # Changed from '|' to ', '
+            f'Attribute {i} visible': 1,
+            f'Attribute {i} global': 1
+        }
+        attributes.append(attribute)
+    return attributes
 
 #############################
 # Main Program Start:
@@ -104,6 +120,16 @@ for collection in collections:
         imageURLs = [x.get('src') for x in product.get('images', [])]
         common['Images'] = ', '.join(imageURLs)
 
+        # Subscription details
+        is_subscription, discount = extract_subscription_details(common['Description'])
+        common['Subscriptions Enabled'] = 1 if is_subscription else 0
+        common['Subscription Discount'] = discount if is_subscription else ''
+
+        # Attributes
+        attributes = process_attributes(product)
+        for attr in attributes:
+            common.update(attr)
+
         # assumptions
         common['Is featured?'] = 0
         common['Stock'] = ''
@@ -130,14 +156,6 @@ for collection in collections:
             # Variable product
             row = OrderedDict(common)
             row['Type'] = 'variable'
-
-            # Handle all attributes
-            for i, option in enumerate(product.get('options', []), 1):
-                row[f'Attribute {i} name'] = option.get('name')
-                row[f'Attribute {i} value(s)'] = '|'.join(option.get('values', []))
-                row[f'Attribute {i} visible'] = 1
-                row[f'Attribute {i} global'] = 1
-
             collector.append(row)
 
             # Handle variations
