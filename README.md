@@ -5,6 +5,6 @@
 ### Terminal
 
 ```shell
-python shopify2woocommerce.py [https://dindin4dogs.com](https://your-shopify-store-url.com)
+python shopify2woocommerce.py https://your-shopify-store-url.com
 ```
 *********************************
